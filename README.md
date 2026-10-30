@@ -324,4 +324,4 @@ colcon build --symlink-install
 
 ## License
 
-TODO: choose a license (MIT and Apache-2.0 are common), add a `LICENSE` file, and update the `license` fields in `drone_description/package.xml` and `setup.py`.
+This project is released under the [MIT License](LICENSE). Copyright (c) 2026 mohamed.khaled221201.
