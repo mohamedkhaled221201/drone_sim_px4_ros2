@@ -1,0 +1,78 @@
+#!/bin/sh
+#
+# @name Custom 4S quad (Pixhawk 6C build sheet)
+# @type Quadrotor
+# @class Copter
+#
+# 450KV 5010 motors, 12x4.5 props, 4S 10000 mAh, ~2.56 kg.
+# Rotor geometry / thrust constants match baylands_dynamic.sdf:
+#   arm radius: 0.2414 m in x and y, motorConstant 2.68e-5, maxRotVelocity 650,
+#   momentConstant 0.0192.
+# SDF motorNumber -> position (FLU body): 0 = front-left (cw), 1 = rear-left (ccw),
+#   2 = rear-right (cw), 3 = front-right (ccw). PX4 uses FRD, so left = -y.
+
+. ${R}etc/init.d/rc.mc_defaults
+
+PX4_SIMULATOR=${PX4_SIMULATOR:=gz}
+PX4_GZ_WORLD=${PX4_GZ_WORLD:=baylands}
+PX4_SIM_MODEL=${PX4_SIM_MODEL:=gz_drone}
+
+# ---- control allocation (geometry) ----
+param set-default CA_AIRFRAME 0
+param set-default CA_ROTOR_COUNT 4
+
+param set-default CA_ROTOR0_PX 0.2414
+param set-default CA_ROTOR0_PY -0.2414
+param set-default CA_ROTOR0_KM -0.0192
+
+param set-default CA_ROTOR1_PX -0.2414
+param set-default CA_ROTOR1_PY -0.2414
+param set-default CA_ROTOR1_KM 0.0192
+
+param set-default CA_ROTOR2_PX -0.2414
+param set-default CA_ROTOR2_PY 0.2414
+param set-default CA_ROTOR2_KM -0.0192
+
+param set-default CA_ROTOR3_PX 0.2414
+param set-default CA_ROTOR3_PY 0.2414
+param set-default CA_ROTOR3_KM 0.0192
+
+# ---- Gazebo motor output: rad/s sent to the SDF motor plugins ----
+param set-default SIM_GZ_EN 1
+param set-default SIM_GZ_EC_FUNC1 101
+param set-default SIM_GZ_EC_FUNC2 102
+param set-default SIM_GZ_EC_FUNC3 103
+param set-default SIM_GZ_EC_FUNC4 104
+param set-default SIM_GZ_EC_MIN1 100
+param set-default SIM_GZ_EC_MIN2 100
+param set-default SIM_GZ_EC_MIN3 100
+param set-default SIM_GZ_EC_MIN4 100
+param set-default SIM_GZ_EC_MAX1 650
+param set-default SIM_GZ_EC_MAX2 650
+param set-default SIM_GZ_EC_MAX3 650
+param set-default SIM_GZ_EC_MAX4 650
+
+# ---- thrust model: thrust ~ omega^2 in the sim, hover ~ 25 N of 45 N max ----
+param set-default THR_MDL_FAC 1.0
+param set-default MPC_THR_HOVER 0.55
+
+# ---- battery: 4S 10000 mAh ----
+# BUGFIX: V_CHARGED was 4.05 (real LiPo cells are 4.2V/cell full), so the
+# sim never showed true 100% and low-battery warnings fired early.
+# SIM_BAT_DRAIN is a fixed discharge current in AMPS (not mA); 1500 was
+# ~150x too high and would empty a 10Ah pack in under 30s. 20A is a
+# reasonable constant hover-ish draw for this 2.56kg quad on 450KV/5010s
+# -- real draw varies with throttle, but PX4's sim battery only supports
+# a fixed drain, so this is the best single-number approximation.
+param set-default BAT1_N_CELLS 4
+param set-default BAT1_V_EMPTY 3.5
+param set-default BAT1_V_CHARGED 4.2
+param set-default BAT1_CAPACITY 10000
+param set-default SIM_BAT_DRAIN 20
+
+# ---- let it arm and accept offboard with no GCS / RC ----
+param set-default NAV_DLL_ACT 0
+param set-default NAV_RCL_ACT 0
+param set-default COM_RC_IN_MODE 4
+param set-default COM_RCL_EXCEPT 4
+param set-default COM_OF_LOSS_T 1.0

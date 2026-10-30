@@ -1,0 +1,93 @@
+- ros_topic_name: "clock"
+  gz_topic_name: "/clock"
+  ros_type_name: "rosgraph_msgs/msg/Clock"
+  gz_type_name: "gz.msgs.Clock"
+  direction: GZ_TO_ROS
+
+# REMOVED: /model/drone/odometry (GZ_TO_ROS, ground truth). PX4's EKF2 is
+# now the source of truth for this stack -- px4_offboard_bridge.py
+# republishes PX4's estimate (from /fmu/out/vehicle_odometry over
+# uXRCE-DDS, not this bridge) onto this exact ROS topic name instead, so
+# everything downstream still just subscribes to /model/drone/odometry
+# unchanged. Leaving Gazebo's ground-truth entry bridged here too would
+# give this topic two publishers racing each other.
+
+# IMU sensor publishes on the exact topic PX4's gz bridge subscribes to
+# (see baylands_dynamic.sdf); ROS side keeps the old name for drone_gui /
+# object_tracker.
+- ros_topic_name: "/model/drone/imu"
+  gz_topic_name: "/world/baylands/model/drone/link/base_link/sensor/imu_sensor/imu"
+  ros_type_name: "sensor_msgs/msg/Imu"
+  gz_type_name: "gz.msgs.IMU"
+  direction: GZ_TO_ROS
+
+# REMOVED: /model/drone/command/motor_speed (ROS_TO_GZ). flight_controller.py
+# used to compute its own mix and publish it as a ROS actuator_msgs/Actuators
+# message for this bridge to forward into Gazebo. PX4 SITL drives the
+# rotors itself -- its own internal Gazebo bridge (part of the PX4 binary,
+# talking gz-transport directly, not ROS) subscribes to the model's motor
+# command topic on its own, so nothing on the ROS side needs to touch it
+# anymore. Keep this removed even if you still see the old topic name
+# referenced in Gazebo logs -- PX4's bridge, not this ros_gz_bridge
+# process, is what's driving it now.
+
+- ros_topic_name: "/model/drone/camera"
+  gz_topic_name: "/model/drone/camera"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+# Needed by semantic_map_node.py to project world-frame lidar/voxel points
+# into image space (pinhole model) so object_tracker's 2D bboxes can be
+# matched against real 3D points. Gazebo auto-publishes this alongside the
+# camera's Image topic; it wasn't bridged before since nothing consumed it.
+- ros_topic_name: "/model/drone/camera_info"
+  gz_topic_name: "/model/drone/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+
+# Drone's own 3D lidar: a Livox Mid-360 model (360x59 deg, 40 rings, mounted
+# upside down and level; see baylands_dynamic.sdf). The LaserScan entry
+# below is left bridged but isn't meaningful with multiple vertical
+# channels (LaserScan is inherently single-plane) — kept only in case
+# something still expects the topic to exist. The /points entry is the
+# real one: Gazebo auto-publishes a PointCloudPacked alongside the
+# LaserScan whenever a gpu_lidar has >1 vertical sample, and this is
+# what the mapping pipeline consumes.
+- ros_topic_name: "/model/drone/scan"
+  gz_topic_name: "/model/drone/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/model/drone/scan/points"
+  gz_topic_name: "/model/drone/scan/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "gz.msgs.PointCloudPacked"
+  direction: GZ_TO_ROS
+
+# One bridge entry per patrolling box (see dynamic_world.sdf / moving_object_patrol.py).
+- ros_topic_name: "/model/moving_box_1/cmd_vel"
+  gz_topic_name: "/model/moving_box_1/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/model/moving_box_2/cmd_vel"
+  gz_topic_name: "/model/moving_box_2/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/model/moving_box_3/cmd_vel"
+  gz_topic_name: "/model/moving_box_3/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/model/moving_box_4/cmd_vel"
+  gz_topic_name: "/model/moving_box_4/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ

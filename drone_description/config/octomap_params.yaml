@@ -1,0 +1,38 @@
+octomap_server_node:
+  ros__parameters:
+    frame_id: odom
+
+    # 0.2 m voxels: voxel count scales with the cube of resolution, so this
+    # is ~0.42x the nodes of 0.15 m. Still finer than the drone airframe.
+    resolution: 0.2
+
+    # SENSOR RANGE: matches the Livox Mid-360 model in baylands_dynamic.sdf
+    # (<range><max>40</max>, its 10%-reflectivity rating). octomap_server drops
+    # any point beyond this BEFORE insertion, so it must move together with
+    # the sensor's max range. Far targets (beyond 40 m) are NOT localized from
+    # the lidar map; semantic_map_node localizes them by casting the camera
+    # ray onto the ground plane (see its ground_plane_z / ray fallback) and
+    # refines with lidar points once the drone is within range.
+    sensor_model.max_range: 40.0
+    sensor_model.min_range: 0.2
+
+    # Z BOUNDS (odom frame, odom z=0 is the drone's spawn height, 5.0 m in the
+    # world). The visual terrain is a 0-8 m heightmap (world z), i.e. roughly
+    # -5..+3 m in odom, so the old -1.0 floor clipped every valley. -8 keeps
+    # all real terrain; 25 keeps the ceiling well above the flight envelope.
+    pointcloud_min_z: -8.0
+    pointcloud_max_z: 25.0
+    filter_ground: false
+    latch: false
+
+    # Isolated single-voxel speckle (lidar range noise) is dropped from the
+    # published cloud.
+    filter_speckles: true
+
+    # Output bounds mirror the input bounds above so they cannot drift apart.
+    occupancy_min_z: -8.0
+    occupancy_max_z: 25.0
+
+    # Merge same-state sibling voxels after each integration (large flat
+    # surfaces collapse into far fewer nodes).
+    compress_map: true

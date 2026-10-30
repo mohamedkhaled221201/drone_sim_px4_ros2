@@ -1,0 +1,739 @@
+<?xml version="1.0"?>
+<!-- REFERENCE ONLY, NOT WHAT GAZEBO ACTUALLY LOADS: per
+     spawn_drone_dynamic_launch.py, the running sim uses the drone model
+     baked directly into baylands_dynamic.sdf's <model name='drone'>
+     block (fixed joints already lumped, links/masses/inertias already
+     resolved to plain numbers), not this xacro converted at spawn time.
+     Physics edits (mass, wind, motor constants, etc.) need to go into
+     that SDF block directly to take effect in sim. Keep this file in
+     sync by eye if you edit the SDF, or re-run whatever URDF->SDF
+     conversion originally produced that block if one is available —
+     otherwise this file will quietly drift from what's actually flying.
+     Wind: baylands_dynamic.sdf's base_footprint and rotor_1..4 links
+     have <enable_wind>true</enable_wind>; matching tags aren't set here
+     since plain URDF has no such element (it'd need a <gazebo
+     reference="..."> block, which isn't confirmed to pass this element
+     through) — this file is annotated below for awareness only. -->
+<robot name="drone" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- Vehicle total is now 2.771 kg: the 0.05 kg lidar placeholder was
+       replaced by a real Livox Mid-360 (0.265 kg). Keep PX4's airframe mass
+       and the SDF lumped inertial in sync. -->
+
+  <!-- ==================== VISUAL REFRESH (visual only) ====================
+       Only <visual> elements and these materials changed in this file. Every collision,
+       inertial, joint origin/axis, sensor and plugin block is untouched, and no meshes are used
+       (boxes, cylinders and spheres only). Reminder from the header: Gazebo loads the drone from
+       baylands_dynamic.sdf, so to see this look in the sim the same visuals have to be copied into
+       the drone model there. -->
+  <material name="carbon"><color rgba="0.09 0.09 0.1 1"/></material>
+  <material name="arm_black"><color rgba="0.14 0.14 0.15 1"/></material>
+  <material name="alu_dark"><color rgba="0.24 0.25 0.27 1"/></material>
+  <material name="alu_light"><color rgba="0.66 0.68 0.71 1"/></material>
+  <material name="shell_white"><color rgba="0.93 0.94 0.96 1"/></material>
+  <material name="motor_graphite"><color rgba="0.15 0.15 0.17 1"/></material>
+  <material name="prop_black"><color rgba="0.05 0.05 0.05 1"/></material>
+  <material name="accent_red"><color rgba="0.78 0.08 0.08 1"/></material>
+  <material name="accent_silver"><color rgba="0.8 0.81 0.84 1"/></material>
+  <material name="camera_body"><color rgba="0.1 0.1 0.11 1"/></material>
+  <material name="camera_accent"><color rgba="0.1 0.25 0.85 1"/></material>
+  <material name="lens_barrel"><color rgba="0.04 0.04 0.05 1"/></material>
+  <material name="lens_glass"><color rgba="0.02 0.05 0.2 1"/></material>
+  <material name="foot_rubber"><color rgba="0.03 0.03 0.03 1"/></material>
+  <material name="gps_black"><color rgba="0.08 0.08 0.09 1"/></material>
+  <material name="led_red"><color rgba="0.95 0.1 0.1 1"/></material>
+  <material name="led_green"><color rgba="0.1 0.9 0.2 1"/></material>
+  <material name="led_white"><color rgba="0.95 0.95 0.95 1"/></material>
+
+
+  <link name="base_footprint"/>
+
+  <joint name="base_footprint_to_base_link" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="base_link">
+    <!-- REAL-HARDWARE MASS UPDATE: base_link now represents the aluminium
+         center pod plus every centrally-mounted item from the build sheet:
+         aluminium frame body (~0.220 kg, estimated — see note below),
+         Pixhawk 6C FC (0.0593 kg), Holybro M10 GPS (0.032 kg), SiK
+         Telemetry Radio V3 air module (0.023 kg), 4S 10000 mAh LiPo
+         (0.940 kg, Tattu-class), Jetson Nano dev kit (0.138 kg), a
+         high-current PDB (0.030 kg, estimated), 5V + 12V BEC modules
+         (0.008 kg each), a small vibration-damper kit for the FC
+         (0.005 kg), and the SIYI HM30 AIR unit only (0.074 kg — the
+         HM30 GROUND unit stays on the ground and is not carried).
+         Motors/ESCs/props live on the arm/rotor links below; the camera
+         +gimbal is its own link further down. Total: 1.537 kg.
+         Geometry (0.3x0.3x0.1m) kept as-is — it already has ample room
+         for this stack, so it wasn't resized. See px4/4901_gz_drone's
+         self.mass comment for the full vehicle total and sourcing. -->
+    <!-- VISUAL REFRESH (visual only: collision, inertial and joints unchanged). The body is now a
+         sandwich: landing-gear cross bars + bottom plate, electronics pod, top plate, dome, GPS mast and
+         two antennas. X-frame roots run out to the arm joints so the arms visibly attach to the body.
+         All of it stays inside 0.12 m (x) by 0.07 m (y) of the centre, well clear of the 0.1524 m prop
+         disks. The visuals are smaller than the 0.3 x 0.3 x 0.1 collision box on purpose. -->
+    <visual name="arm_root_a"><geometry><cylinder radius="0.01" length="0.2828"/></geometry><origin xyz="0 0 0" rpy="0 1.5708 0.7854"/><material name="arm_black"/></visual>
+    <visual name="arm_root_b"><geometry><cylinder radius="0.01" length="0.2828"/></geometry><origin xyz="0 0 0" rpy="0 1.5708 -0.7854"/><material name="arm_black"/></visual>
+    <visual name="gear_bar_x"><geometry><box size="0.29 0.024 0.008"/></geometry><origin xyz="0 0 -0.046" rpy="0 0 0"/><material name="arm_black"/></visual>
+    <visual name="gear_bar_y"><geometry><box size="0.024 0.29 0.008"/></geometry><origin xyz="0 0 -0.046" rpy="0 0 0"/><material name="arm_black"/></visual>
+    <visual name="bottom_plate"><geometry><box size="0.24 0.14 0.004"/></geometry><origin xyz="0 0 -0.04" rpy="0 0 0"/><material name="carbon"/></visual>
+    <visual name="pod"><geometry><box size="0.232 0.11 0.076"/></geometry><material name="alu_dark"/></visual>
+    <visual name="top_plate"><geometry><box size="0.24 0.14 0.004"/></geometry><origin xyz="0 0 0.04" rpy="0 0 0"/><material name="carbon"/></visual>
+    <visual name="dome"><geometry><sphere radius="0.05"/></geometry><origin xyz="-0.01 0 0.042" rpy="0 0 0"/><material name="shell_white"/></visual>
+    <visual name="arm_clamp_1"><geometry><box size="0.03 0.026 0.034"/></geometry><origin xyz="0.088 0.088 0" rpy="0 0 0.7854"/><material name="alu_light"/></visual>
+    <visual name="arm_clamp_2"><geometry><box size="0.03 0.026 0.034"/></geometry><origin xyz="-0.088 0.088 0" rpy="0 0 2.3562"/><material name="alu_light"/></visual>
+    <visual name="arm_clamp_3"><geometry><box size="0.03 0.026 0.034"/></geometry><origin xyz="-0.088 -0.088 0" rpy="0 0 -2.3562"/><material name="alu_light"/></visual>
+    <visual name="arm_clamp_4"><geometry><box size="0.03 0.026 0.034"/></geometry><origin xyz="0.088 -0.088 0" rpy="0 0 -0.7854"/><material name="alu_light"/></visual>
+    <visual name="camera_bracket"><geometry><box size="0.02 0.04 0.036"/></geometry><origin xyz="0.124 0 0.012" rpy="0 0 0"/><material name="alu_dark"/></visual>
+    <visual name="gps_mast"><geometry><cylinder radius="0.004" length="0.05"/></geometry><origin xyz="-0.085 0 0.067" rpy="0 0 0"/><material name="arm_black"/></visual>
+    <visual name="gps_puck"><geometry><cylinder radius="0.016" length="0.01"/></geometry><origin xyz="-0.085 0 0.097" rpy="0 0 0"/><material name="gps_black"/></visual>
+    <visual name="antenna_left"><geometry><cylinder radius="0.0025" length="0.08"/></geometry><origin xyz="-0.105 0.0637 0.0796" rpy="-0.35 0 0"/><material name="arm_black"/></visual>
+    <visual name="antenna_right"><geometry><cylinder radius="0.0025" length="0.08"/></geometry><origin xyz="-0.105 -0.0637 0.0796" rpy="0.35 0 0"/><material name="arm_black"/></visual>
+
+    <collision>
+      <geometry>
+        <box size="0.3 0.3 0.1"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <mass value="1.537"/>
+      <inertia
+        ixx="0.013375"
+        ixy="0"
+        ixz="0"
+        iyy="0.013375"
+        iyz="0"
+        izz="0.023060"/>
+    </inertial>
+  </link>
+
+  <!-- ==================== ARMS + ROTORS ==================== -->
+
+  <xacro:macro name="arm_rotor" params="id x y yaw spin led">
+
+    <link name="arm_${id}">
+      <!-- VISUAL REFRESH: same tube as before, plus the motor (base + bell, 5010 size) at the rotor
+           position and a coloured light collar (red front-left, green front-right, white at the rear). -->
+      <visual name="tube"><geometry><cylinder radius="0.01" length="0.2"/></geometry><origin xyz="0.1 0 0" rpy="0 1.5708 0"/><material name="arm_black"/></visual>
+      <visual name="motor_base"><geometry><cylinder radius="0.022" length="0.024"/></geometry><origin xyz="0.2 0 0" rpy="0 0 0"/><material name="alu_light"/></visual>
+      <visual name="motor_bell"><geometry><cylinder radius="0.0275" length="0.02"/></geometry><origin xyz="0.2 0 0.022" rpy="0 0 0"/><material name="motor_graphite"/></visual>
+      <visual name="light_collar"><geometry><cylinder radius="0.0115" length="0.01"/></geometry><origin xyz="0.165 0 0" rpy="0 1.5708 0"/><material name="${led}"/></visual>
+
+      <collision>
+        <geometry>
+          <cylinder radius="0.01" length="0.2"/>
+        </geometry>
+        <origin xyz="0.1 0 0" rpy="0 1.5708 0"/>
+      </collision>
+
+      <inertial>
+        <!-- Arm link now carries the arm's own printed-tube mass PLUS the
+             non-rotating hardware bolted to it: one 450KV 5010 BLDC motor
+             (0.115 kg) and one 40A ESC (0.032 kg), per the build sheet.
+             Only the propeller itself is modeled on the spinning rotor_N
+             link below. Arm tube estimated at 0.045 kg (share of the
+             ~0.400 kg total aluminium frame not in the center pod).
+             Total per arm: 0.045+0.115+0.032 = 0.192 kg. Inertia scaled
+             from the original placeholder in proportion to the mass
+             increase (0.192/0.05 = 3.84x) — a first-order estimate, not
+             a real solid-body calc for the new hardware's shape. -->
+        <mass value="0.192"/>
+        <inertia
+          ixx="0.000384"
+          ixy="0"
+          ixz="0"
+          iyy="0.000384"
+          iyz="0"
+          izz="0.000384"/>
+      </inertial>
+    </link>
+
+    <joint name="base_to_arm_${id}" type="fixed">
+      <parent link="base_link"/>
+      <child link="arm_${id}"/>
+      <origin xyz="${x} ${y} 0" rpy="0 0 ${yaw}"/>
+    </joint>
+
+    <link name="rotor_${id}">
+      <!-- 12-inch propeller (radius 0.1524 m = 6 inches), matching the
+           "12إنش كفاءة أعلى" propellers on the build sheet — was an 8-inch
+           placeholder (radius 0.1). Mass is the propeller ONLY (0.015 kg,
+           a 1245-class plastic/glass-fiber prop weighs ~28-34 g per CW+CCW
+           pair, so ~15 g each); the motor+ESC mass lives on arm_${id}
+           above since they don't spin with the blade. Inertia uses a
+           two-thin-blade approximation (each blade ~ (1/3) m R^2 about
+           its root) for izz, with ixx=iyy=izz/2 via the perpendicular-axis
+           theorem for a thin planar object — a reasonable stand-in, not
+           a real blade-geometry calc.
+
+           VISUAL UPGRADE (disk -> two-blade shape): the visual used to be
+           a single flat cylinder (a "puck") spanning the full swept
+           radius — a common cheap stand-in for a fast-spinning prop, but
+           it never actually looked like a propeller, just a coin. The
+           INERTIA above already modeled this as two real blades (that's
+           what "two-thin-blade approximation" means), so the visual was
+           the only piece still describing a disk. Below: a small central
+           hub cylinder plus two blade boxes running from the hub out to
+           the same 0.1524 m tip radius the old disk used, so the visual
+           now actually matches the physics it's sitting on top of.
+
+           COLLISION LEFT AS THE FULL DISK, DELIBERATELY: two thin blade
+           boxes only physically occupy the swept area at one instant, but
+           a spinning prop's real collision hazard IS the full swept disk
+           (anything that would touch either blade at some point in its
+           rotation). Shrinking collision geometry to match the new visual
+           would make prop-strike collisions with terrain/obstacles LESS
+           likely to register than they really should, not more accurate.
+           Visual and collision are allowed to differ for exactly this
+           reason: visual is what it looks like, collision is what it can
+           hit. -->
+      <!-- PROP CLEARANCE FIX (visual only). The old visuals sat at z=0, the same height as the arm tube,
+           so the +x blade lay inside the arm and swept through the body corner as the rotor spun. Every
+           prop visual is now raised 0.038 m along the rotor's own spin axis (z is the joint axis, so this
+           cannot change the spin), resting on the motor bell drawn on the arm link. Each side is three
+           tapered, pitched segments out to the same 0.1524 m tip radius; CW and CCW props are pitched the
+           opposite way and the tip and nut colour shows the spin direction (red CW, silver CCW).
+           The collision disk below is unchanged (full swept disk at z=0). -->
+      <visual name="hub"><geometry><cylinder radius="0.013" length="0.012"/></geometry><origin xyz="0 0 0.038" rpy="0 0 0"/><material name="prop_black"/></visual>
+      <visual name="nut"><geometry><sphere radius="0.009"/></geometry><origin xyz="0 0 0.044" rpy="0 0 0"/><material name="${'accent_silver' if spin == 'ccw' else 'accent_red'}"/></visual>
+      <visual name="blade_p_a"><geometry><box size="0.048 0.026 0.004"/></geometry><origin xyz="0.036 0 0.038" rpy="${1 * (1 if spin == 'ccw' else -1) * 0.18} 0 0"/><material name="prop_black"/></visual>
+      <visual name="blade_p_b"><geometry><box size="0.05 0.021 0.004"/></geometry><origin xyz="0.085 0 0.038" rpy="${1 * (1 if spin == 'ccw' else -1) * 0.12} 0 0"/><material name="prop_black"/></visual>
+      <visual name="blade_p_c"><geometry><box size="0.0424 0.015 0.004"/></geometry><origin xyz="0.1312 0 0.038" rpy="${1 * (1 if spin == 'ccw' else -1) * 0.06} 0 0"/><material name="${'accent_silver' if spin == 'ccw' else 'accent_red'}"/></visual>
+      <visual name="blade_n_a"><geometry><box size="0.048 0.026 0.004"/></geometry><origin xyz="-0.036 0 0.038" rpy="${-1 * (1 if spin == 'ccw' else -1) * 0.18} 0 0"/><material name="prop_black"/></visual>
+      <visual name="blade_n_b"><geometry><box size="0.05 0.021 0.004"/></geometry><origin xyz="-0.085 0 0.038" rpy="${-1 * (1 if spin == 'ccw' else -1) * 0.12} 0 0"/><material name="prop_black"/></visual>
+      <visual name="blade_n_c"><geometry><box size="0.0424 0.015 0.004"/></geometry><origin xyz="-0.1312 0 0.038" rpy="${-1 * (1 if spin == 'ccw' else -1) * 0.06} 0 0"/><material name="${'accent_silver' if spin == 'ccw' else 'accent_red'}"/></visual>
+
+      <collision>
+        <geometry>
+          <cylinder radius="0.1524" length="0.01"/>
+        </geometry>
+      </collision>
+
+      <inertial>
+        <mass value="0.015"/>
+        <inertia
+          ixx="0.000116"
+          ixy="0"
+          ixz="0"
+          iyy="0.000116"
+          iyz="0"
+          izz="0.000232"/>
+      </inertial>
+    </link>
+
+    <joint name="arm_${id}_to_rotor_${id}" type="continuous">
+      <parent link="arm_${id}"/>
+      <child link="rotor_${id}"/>
+      <origin xyz="0.2 0 0" rpy="0 0 0"/>
+      <axis xyz="0 0 1"/>
+    </joint>
+
+  </xacro:macro>
+
+  <!-- Quad-X -->
+
+  <xacro:arm_rotor
+    id="1"
+    x="0.1"
+    y="0.1"
+    yaw="0.7854"
+    spin="cw"
+    led="led_red"/>
+
+  <xacro:arm_rotor
+    id="2"
+    x="-0.1"
+    y="0.1"
+    yaw="2.3562"
+    spin="ccw"
+    led="led_white"/>
+
+  <xacro:arm_rotor
+    id="3"
+    x="-0.1"
+    y="-0.1"
+    yaw="-2.3562"
+    spin="cw"
+    led="led_white"/>
+
+  <xacro:arm_rotor
+    id="4"
+    x="0.1"
+    y="-0.1"
+    yaw="-0.7854"
+    spin="ccw"
+    led="led_green"/>
+
+
+  <!-- ==================== CAMERA ==================== -->
+
+  <link name="camera_link">
+    <!-- SIYI A8 Mini gimbal camera: 95 g, 55x55x70mm, per its datasheet.
+         Its 3-axis gimbal mechanism is internal to that 95 g figure, so
+         camera_gimbal_link below (the mount interface) is kept as a
+         near-zero placeholder rather than double-counting gimbal mass. -->
+    <!-- VISUAL REFRESH: same 0.055 x 0.055 x 0.07 housing, now with a lens barrel and glass. Everything is
+         within 0.04 m of the camera origin, inside the camera's 0.05 m near clip, so the image is unchanged. -->
+    <visual name="housing"><geometry><box size="0.055 0.055 0.07"/></geometry><material name="camera_body"/></visual>
+    <visual name="accent_band"><geometry><box size="0.0562 0.0562 0.008"/></geometry><material name="camera_accent"/></visual>
+    <visual name="lens_barrel"><geometry><cylinder radius="0.017" length="0.01"/></geometry><origin xyz="0.0325 0 0" rpy="0 1.5708 0"/><material name="lens_barrel"/></visual>
+    <visual name="lens_glass"><geometry><cylinder radius="0.012" length="0.002"/></geometry><origin xyz="0.0375 0 0" rpy="0 1.5708 0"/><material name="lens_glass"/></visual>
+
+    <collision>
+      <geometry>
+        <box size="0.055 0.055 0.07"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <mass value="0.095"/>
+      <inertia
+        ixx="0.0000627"
+        ixy="0"
+        ixz="0"
+        iyy="0.0000627"
+        iyz="0"
+        izz="0.0000479"/>
+    </inertial>
+  </link>
+
+  <link name="camera_gimbal_link">
+    <!-- Mount/vibration-damper interface only — the SIYI A8 Mini's own
+         95 g (gimbal mechanism included) is already on camera_link above. -->
+    <inertial>
+      <mass value="0.005"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0" iyy="0.000001" iyz="0" izz="0.000001"/>
+    </inertial>
+  </link>
+
+  <joint name="base_to_gimbal" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_gimbal_link"/>
+    <origin xyz="0.15 0 0.02" rpy="0 0 0"/>
+  </joint>
+
+  <joint name="camera_gimbal_joint" type="fixed">
+    <parent link="camera_gimbal_link"/>
+    <child link="camera_link"/>
+    <!-- CAMERA MOUNT PITCH (fixed, not a real gimbal — object_tracker.py
+         has no altitude setpoint, so this angle is what actually sets
+         the drone's standoff HEIGHT for a given standoff DISTANCE. The
+         tracker only keeps the target vertically centered in-frame (dy)
+         and horizontally at distance_threshold_m; when a ground target
+         is centered on the boresight of a camera tilted down by pitch
+         angle theta, geometry gives height ~= distance * tan(theta).
+         Was 0.733 rad (~42 deg) -> ~0.90 * distance -> ~18m at the new
+         20m distance_threshold_m (object_tracker.py), overshooting the
+         requested 10-15m band. 0.559 rad (~32 deg) -> tan(32 deg)=0.625
+         -> ~12.5m at 20m, centered in that band. This is a geometric
+         approximation (assumes flat ground, target exactly centered,
+         and no independent altitude hold) — verify against actual
+         AUTO-mode behavior and retune if PX4/
+         mission_manager.py impose their own altitude limits. -->
+    <origin xyz="0 0 0" rpy="0 0.559 0"/>
+  </joint>
+
+  <link name="camera_link_optical"/>
+
+  <joint name="camera_to_optical" type="fixed">
+    <parent link="camera_link"/>
+    <child link="camera_link_optical"/>
+    <origin xyz="0 0 0" rpy="-1.5708 0 -1.5708"/>
+  </joint>
+
+
+  <!-- ==================== LANDING LEGS ==================== -->
+  <!-- See baylands_dynamic.sdf's matching collisions/visuals for the full
+       rationale: the lidar_link below is the lowest point on the airframe
+       (bottom at z=-0.09 relative to base_link), so without these the
+       drone landed on the lidar housing itself and rocked on that one
+       off-center contact point. These four skids' tips sit at z=-0.20,
+       clear below the lidar, at the four cardinal points (+/-0.13 on x
+       and y) — clear of its 0.03 radius and clear of the diagonal arms
+       so they don't collide with either — giving four ground contacts
+       that constrain both tilt axes instead of just one. -->
+
+  <xacro:macro name="landing_leg" params="id x y">
+    <link name="landing_leg_${id}">
+      <!-- VISUAL REFRESH: same 0.15 m post as the collision, plus a rubber foot that ends exactly at the
+           old tip (z=-0.075 in this link, so the drone still rests at the same height) and a collar at the top. -->
+      <visual name="post"><geometry><cylinder radius="0.008" length="0.15"/></geometry><material name="arm_black"/></visual>
+      <visual name="foot"><geometry><cylinder radius="0.012" length="0.02"/></geometry><origin xyz="0 0 -0.065" rpy="0 0 0"/><material name="foot_rubber"/></visual>
+      <visual name="collar"><geometry><cylinder radius="0.011" length="0.01"/></geometry><origin xyz="0 0 0.07" rpy="0 0 0"/><material name="alu_light"/></visual>
+
+      <collision>
+        <geometry>
+          <cylinder radius="0.008" length="0.15"/>
+        </geometry>
+      </collision>
+
+      <inertial>
+        <mass value="0.01"/>
+        <inertia
+          ixx="0.00001"
+          ixy="0"
+          ixz="0"
+          iyy="0.00001"
+          iyz="0"
+          izz="0.000001"/>
+      </inertial>
+    </link>
+
+    <joint name="base_to_landing_leg_${id}" type="fixed">
+      <parent link="base_link"/>
+      <child link="landing_leg_${id}"/>
+      <!-- Joint origin at the leg's own center (z=-0.125): base_link's
+           underside is at z=-0.05 (half the 0.1m body height), and the
+           0.15m-long cylinder is centered on its link origin, so its top
+           sits flush at -0.05 and its tip reaches -0.20. -->
+      <origin xyz="${x} ${y} -0.125" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:landing_leg id="left" x="0" y="0.13"/>
+  <xacro:landing_leg id="right" x="0" y="-0.13"/>
+  <xacro:landing_leg id="front" x="0.13" y="0"/>
+  <xacro:landing_leg id="rear" x="-0.13" y="0"/>
+
+
+  <!-- ==================== IMU ==================== -->
+
+  <link name="imu_link">
+    <visual>
+      <geometry>
+        <box size="0.01 0.01 0.005"/>
+      </geometry>
+
+      <material name="green">
+        <color rgba="0.1 0.8 0.1 1"/>
+      </material>
+    </visual>
+
+    <collision>
+      <geometry>
+        <box size="0.01 0.01 0.005"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <mass value="0.001"/>
+      <inertia
+        ixx="0.000001"
+        ixy="0"
+        ixz="0"
+        iyy="0.000001"
+        iyz="0"
+        izz="0.000001"/>
+    </inertial>
+  </link>
+
+  <joint name="base_to_imu" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 0.01" rpy="0 0 0"/>
+  </joint>
+
+
+  <!-- ==================== LIDAR ==================== -->
+
+  <link name="lidar_link">
+    <!-- Livox Mid-360: 65 x 65 x 60 mm, 265 g (Livox datasheet). Mounted
+         upside down (roll 180 deg, see base_to_lidar), NOT tilted. -->
+    <visual name="body"><geometry><box size="0.065 0.065 0.06"/></geometry><material name="alu_dark"/></visual>
+    <visual name="window_band"><geometry><cylinder radius="0.0335" length="0.03"/></geometry><material name="lens_barrel"/></visual>
+
+    <collision>
+      <geometry>
+        <box size="0.065 0.065 0.06"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <mass value="0.265"/>
+      <inertia ixx="0.000174" ixy="0" ixz="0" iyy="0.000174" iyz="0" izz="0.000187"/>
+    </inertial>
+  </link>
+
+  <joint name="base_to_lidar" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
+    <!-- Upside-down mount (roll = pi): the Mid-360's -7..+52 deg vertical
+         FOV then covers +7 deg above to -52 deg below the horizon. The
+         sensor frame is level, not tilted. -->
+    <origin xyz="0 0 -0.08" rpy="3.14159265 0 0"/>
+  </joint>
+
+  <gazebo reference="lidar_link">
+    <disableFixedJointLumping>true</disableFixedJointLumping>
+
+    <!-- Livox Mid-360 approximation, identical to baylands_dynamic.sdf
+         (which is what Gazebo really loads): 360 x 59 deg (-7..+52 deg in
+         the sensor frame), 40 rings x 500 columns = 20k pts/frame = 200k
+         pts/s at 10 Hz, 0.2-40 m (the 10%-reflectivity figure), 2 cm noise. -->
+    <sensor name="lidar_sensor" type="gpu_lidar">
+      <always_on>true</always_on>
+      <update_rate>10</update_rate>
+      <topic>/model/drone/scan</topic>
+      <visualize>false</visualize>
+      <lidar>
+        <scan>
+          <horizontal>
+            <samples>500</samples>
+            <resolution>1</resolution>
+            <min_angle>-3.14159265</min_angle>
+            <max_angle>3.14159265</max_angle>
+          </horizontal>
+          <vertical>
+            <samples>40</samples>
+            <resolution>1</resolution>
+            <min_angle>-0.1222</min_angle>
+            <max_angle>0.9076</max_angle>
+          </vertical>
+        </scan>
+        <range>
+          <min>0.2</min>
+          <max>40.0</max>
+          <resolution>0.01</resolution>
+        </range>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.02</stddev>
+        </noise>
+      </lidar>
+    </sensor>
+  </gazebo>
+
+
+  <!-- ==================== GAZEBO IMU ==================== -->
+
+  <gazebo reference="imu_link">
+
+    <sensor
+      name="imu_sensor"
+      type="imu">
+
+      <always_on>true</always_on>
+
+      <update_rate>200</update_rate>
+
+      <topic>/model/drone/imu</topic>
+
+    </sensor>
+
+  </gazebo>
+
+
+  <!-- ==================== GAZEBO CAMERA ==================== -->
+
+  <gazebo reference="camera_link">
+
+    <sensor
+      name="camera_sensor"
+      type="camera">
+
+      <always_on>true</always_on>
+      <update_rate>30</update_rate>
+      <topic>/model/drone/camera</topic>
+      <visualize>true</visualize>
+
+      <camera>
+        <horizontal_fov>1.3962634</horizontal_fov>
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.05</near>
+          <far>100</far>
+        </clip>
+      </camera>
+
+    </sensor>
+
+  </gazebo>
+
+
+  <!-- ==================== ODOMETRY ==================== -->
+
+  <gazebo>
+
+    <plugin
+      filename="gz-sim-odometry-publisher-system"
+      name="gz::sim::systems::OdometryPublisher">
+
+      <odom_frame>odom</odom_frame>
+
+      <robot_base_frame>base_link</robot_base_frame>
+
+      <odom_topic>/model/drone/odometry</odom_topic>
+
+      <odom_publish_frequency>100</odom_publish_frequency>
+
+      <dimensions>3</dimensions>
+
+    </plugin>
+
+  </gazebo>
+
+
+  <!-- ==================== MOTORS ==================== -->
+
+  <xacro:macro
+    name="motor_model"
+    params="id motor_number direction">
+
+    <gazebo>
+
+      <plugin
+        filename="gz-sim-multicopter-motor-model-system"
+        name="gz::sim::systems::MulticopterMotorModel">
+
+        <robotNamespace>
+          drone
+        </robotNamespace>
+
+        <jointName>
+          arm_${id}_to_rotor_${id}
+        </jointName>
+
+        <linkName>
+          rotor_${id}
+        </linkName>
+
+        <turningDirection>
+          ${direction}
+        </turningDirection>
+
+        <!-- MOTOR SPIN-UP/SPIN-DOWN LAG: these were the stock PX4-SITL
+             "iris" defaults (0.0125s up / 0.025s down), tuned for a
+             light, racing-style airframe built to respond as fast as
+             possible, not this ~2.56kg camera/mapping quad (was ~1.3kg
+             before the REAL-HARDWARE UPDATE swapped in the actual BOM —
+             see PX4's self.mass). A heavier prop+motor
+             combination on this weight class has more rotational inertia
+             to accelerate, so a real one takes noticeably longer to spin
+             up/down than a micro racing quad does. Raised to something
+             more representative of a mid-size brushless motor+ESC combo
+             (roughly 50 to 150ms is typical for this class); spin-down is
+             kept slower than spin-up, same as before, since a freely
+             spinning prop decelerating under its own drag takes longer
+             than one being actively driven up to speed by the ESC.
+
+             This is IN ADDITION TO, not a replacement for,
+             PX4's own software-side thrust_slew_rate
+             (29 N/s, about 0.86s to spool from 0 to hover thrust): that
+             slew rate limits how fast the CONTROLLER's commanded thrust
+             is allowed to change tick-to-tick (modeling ESC/controller-
+             level ramping policy), while this timeConstantUp/Down models
+             the PHYSICAL motor's own lag in actually reaching whatever
+             speed it was just commanded to reach. Real hardware has both
+             layers too (a flight controller's own slew-rate limiting on
+             top of the motor's physical response time), so this doubles
+             up on purpose rather than by oversight. -->
+        <timeConstantUp>
+          0.06
+        </timeConstantUp>
+
+        <timeConstantDown>
+          0.09
+        </timeConstantDown>
+
+        <!-- MOTOR/PROP CONSTANTS RE-DERIVED FOR THE REAL HARDWARE: 450KV
+             5010 BLDC motor on 4S (14.8V) turning a 12x4.5 propeller
+             (D=0.3048m), replacing the PX4-SITL "iris" 10x4.5 defaults
+             this file previously carried unchanged.
+
+             maxRotVelocity: unloaded speed = KV*V = 450*14.8 = 6660 rpm
+             = 697.6 rad/s; set to 650 rad/s (~93%) as a practical loaded
+             ceiling.
+
+             motorConstant (thrust = motorConstant * omega^2): derived from
+             thrust = C_T * rho * D^4 / (2*pi)^2 * omega^2 with C_T ~= 0.10
+             (a representative static thrust coefficient for this class of
+             slow-flyer multirotor prop — no bench thrust-curve data was
+             available for this exact motor+prop pair, so this is an
+             engineering estimate, not a measured value), rho=1.225 kg/m^3,
+             D=0.3048m: motorConstant = 0.10*1.225*0.3048^4/(4*pi^2)
+             ~= 2.68e-05. At this vehicle's 2.556 kg mass (see
+             PX4 airframe 4901_gz_drone), that puts hover at ~48N/s^2... i.e.
+             ~74% of max rotor speed and ~55% of max thrust per motor
+             (T/W ~= 1.8), leaving a comfortable maneuvering margin.
+
+             momentConstant (reaction torque = momentConstant * thrust):
+             the iris value (0.016) scales roughly linearly with prop
+             diameter for a similar pitch/shape prop; both iris (10x4.5)
+             and this build (12x4.5) share the same 4.5" pitch, so
+             0.016 * (0.3048/0.254) ~= 0.0192.
+
+             rotorDragCoefficient / rollingMomentCoefficient: both scaled
+             by the rotor disk-area ratio (0.3048/0.254)^2 ~= 1.44x, a
+             first-order approximation (real values would need a bench
+             thrust/drag test of this exact motor+prop combo). -->
+        <maxRotVelocity>
+          650.0
+        </maxRotVelocity>
+
+        <motorConstant>
+          2.68e-05
+        </motorConstant>
+
+        <momentConstant>
+          0.0192
+        </momentConstant>
+
+        <commandSubTopic>
+          command/motor_speed
+        </commandSubTopic>
+
+        <motorNumber>
+          ${motor_number}
+        </motorNumber>
+
+        <rotorDragCoefficient>
+          1.161e-04
+        </rotorDragCoefficient>
+
+        <rollingMomentCoefficient>
+          1.44e-06
+        </rollingMomentCoefficient>
+
+        <rotorVelocitySlowdownSim>
+          10
+        </rotorVelocitySlowdownSim>
+
+        <motorType>
+          velocity
+        </motorType>
+
+      </plugin>
+
+    </gazebo>
+
+  </xacro:macro>
+
+  <xacro:motor_model
+    id="1"
+    motor_number="0"
+    direction="cw"/>
+
+  <xacro:motor_model
+    id="2"
+    motor_number="1"
+    direction="ccw"/>
+
+  <xacro:motor_model
+    id="3"
+    motor_number="2"
+    direction="cw"/>
+
+  <xacro:motor_model
+    id="4"
+    motor_number="3"
+    direction="ccw"/>
+
+</robot>
